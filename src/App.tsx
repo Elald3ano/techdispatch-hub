@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BarChart3, ClipboardList, CodeXml, Database, FileText, Layers, Map as MapIcon, RefreshCw, ShieldCheck, ShieldAlert, SlidersHorizontal, TrendingUp, WifiOff } from 'lucide-react'
+import { BarChart3, CodeXml, Database, FileText, Layers, Map as MapIcon, RefreshCw, ShieldCheck, ShieldAlert, SlidersHorizontal, TrendingUp, WifiOff } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { FileUpload } from './components/FileUpload'
-import { MetricCards } from './components/MetricCards'
-import { ServiceTable } from './components/ServiceTable'
 import { DirectorioTecnicos } from './components/territorio/DirectorioTecnicos'
 import { DetalleTecnicoTerritorio } from './components/territorio/DetalleTecnicoTerritorio'
 import { AnaliticaDashboard } from './components/analitica/AnaliticaDashboard'
@@ -15,7 +12,6 @@ import { PdfExportModal } from './components/PdfExportModal'
 import { aplicarMatrizAsignacion } from './services/assignmentEngine'
 import { isSupabaseConfigured } from './lib/supabase'
 import {
-  actualizarTecnicoServicio,
   getCiudadesActivas,
   getReglas,
   getServiciosActivos,
@@ -29,9 +25,7 @@ import type { ResultadoCierres } from './services/reconciliationService'
 import { cn } from './lib/utils'
 
 type EstadoConexion = 'conectando' | 'conectado' | 'error'
-type VistaPrincipal = 'despacho' | 'territorio' | 'analitica' | 'cierres'
-
-const TODOS_CIUDAD = 'todos'
+type VistaPrincipal = 'centro_mando' | 'territorio' | 'cierres'
 
 const MAX_TOASTS = 4
 
@@ -50,10 +44,9 @@ function App() {
   const toastId = useRef(0)
   const [matrizAbierta, setMatrizAbierta] = useState(false)
   const [pdfAbierto, setPdfAbierto] = useState(false)
-  const [ciudadFiltrada, setCiudadFiltrada] = useState(TODOS_CIUDAD)
 
   // Navegación principal + Gestión Territorial
-  const [vistaActiva, setVistaActiva] = useState<VistaPrincipal>('despacho')
+  const [vistaActiva, setVistaActiva] = useState<VistaPrincipal>('centro_mando')
   const [tecnicoSeleccionadoId, setTecnicoSeleccionadoId] = useState<string | null>(null)
 
   // Auditoría de Cierres: estado levantado para persistir entre pestañas.
@@ -188,30 +181,6 @@ function App() {
     setTecnicoSeleccionadoId(null)
     await refrescarTerritorio()
   }, [refrescarTerritorio])
-
-  const handleReasignar = useCallback(
-    async (servicioId: string, tecnicoId: string | null) => {
-      // Actualización optimista + rollback ante error.
-      const previos = serviciosActivos
-      setServiciosActivos((prev) =>
-        prev.map((s) => (s.id === servicioId ? { ...s, tecnico_id: tecnicoId } : s)),
-      )
-      try {
-        await actualizarTecnicoServicio(servicioId, tecnicoId)
-        const nombreTecnico = tecnicoId
-          ? (tecnicos.find((t) => t.id === tecnicoId)?.nombre ?? 'Técnico')
-          : 'Sin asignar'
-        notificar(`Técnico actualizado: ${nombreTecnico}.`, 'success')
-      } catch (error) {
-        setServiciosActivos(previos)
-        notificar(
-          error instanceof Error ? error.message : 'No se pudo reasignar el técnico.',
-          'error',
-        )
-      }
-    },
-    [serviciosActivos, tecnicos, notificar],
-  )
 
   const reaplicarMatriz = useCallback(() => {
     const reasignados = aplicarMatrizAsignacion(serviciosActivos, reglas)
@@ -447,9 +416,8 @@ function App() {
             <nav className="flex w-fit gap-1 rounded-xl bg-white p-1 shadow-sm ring-1 ring-slate-200">
               {(
                 [
-                  { id: 'despacho', label: 'Despacho en Vivo', icon: ClipboardList },
+                  { id: 'centro_mando', label: 'Centro de Mando', icon: BarChart3 },
                   { id: 'territorio', label: 'Gestión Territorial', icon: MapIcon },
-                  { id: 'analitica', label: 'Analítica Distrital', icon: BarChart3 },
                   { id: 'cierres', label: 'Auditoría de Cierres', icon: TrendingUp },
                 ] as const
               ).map(({ id, label, icon: Icon }) => (
@@ -459,7 +427,6 @@ function App() {
                   onClick={() => {
                     setVistaActiva(id)
                     setTecnicoSeleccionadoId(null)
-                    if (id === 'despacho') void refrescarServicios()
                   }}
                   className={cn(
                     'flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition',
@@ -474,24 +441,7 @@ function App() {
               ))}
             </nav>
 
-            {vistaActiva === 'despacho' ? (
-              <>
-                <MetricCards servicios={serviciosActivos} />
-
-                <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-                  <ServiceTable
-                    servicios={serviciosActivos}
-                    tecnicos={tecnicos}
-                    onReasignar={handleReasignar}
-                    notificar={notificar}
-                    onCambioCiudadFiltrada={setCiudadFiltrada}
-                  />
-                  <div className="xl:sticky xl:top-24 xl:self-start">
-                    <FileUpload procesando={procesando} onProcesar={handleProcesar} />
-                  </div>
-                </div>
-              </>
-            ) : vistaActiva === 'analitica' ? (
+            {vistaActiva === 'centro_mando' ? (
               <AnaliticaDashboard
                 servicios={serviciosActivos}
                 tecnicos={tecnicos}
@@ -555,7 +505,6 @@ function App() {
         onCerrar={() => setPdfAbierto(false)}
         servicios={serviciosActivos}
         tecnicos={tecnicos}
-        ciudadInicial={ciudadFiltrada}
         notificar={notificar}
       />
 
