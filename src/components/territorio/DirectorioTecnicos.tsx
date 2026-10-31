@@ -1,9 +1,17 @@
-import { useMemo, useState } from 'react'
-import { ChevronRight, Loader2, Map as MapIcon, Search, UserPlus, UserRound } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
+import {
+  ChevronRight,
+  FileSpreadsheet,
+  Loader2,
+  Map as MapIcon,
+  Search,
+  UserPlus,
+  UserRound,
+} from 'lucide-react'
 import { limpiarTexto } from '../../lib/normalizer'
 import { cn } from '../../lib/utils'
 import { Modal } from '../Modal'
-import { crearTecnico } from '../../services/supabaseService'
+import { crearTecnico, importarMatrizDesdeExcel } from '../../services/supabaseService'
 import type { ReglaConTecnico, Tecnico } from '../../types'
 import type { ToastVariant } from '../ToastContainer'
 
@@ -15,6 +23,8 @@ interface DirectorioTecnicosProps {
   notificar: (mensaje: string, variant?: ToastVariant) => void
   /** Se invoca tras crear un técnico para refrescar y seleccionarlo. */
   onCreado: (tecnico: Tecnico) => Promise<void>
+  /** Se invoca tras importar la matriz por Excel para refrescar reglas y técnicos. */
+  onCambio?: () => Promise<void>
 }
 
 type FiltroRapido = 'todos' | 'conBarrios' | 'sinBarrios'
@@ -32,6 +42,7 @@ export function DirectorioTecnicos({
   onSeleccionar,
   notificar,
   onCreado,
+  onCambio,
 }: DirectorioTecnicosProps) {
   const [busqueda, setBusqueda] = useState('')
   const [filtro, setFiltro] = useState<FiltroRapido>('todos')
@@ -42,6 +53,10 @@ export function DirectorioTecnicos({
   const [formTelefono, setFormTelefono] = useState('')
   const [formDocumento, setFormDocumento] = useState('')
   const [creando, setCreando] = useState(false)
+
+  // Importación masiva de la matriz de asignación desde Excel.
+  const [importando, setImportando] = useState(false)
+  const archivoMatrizRef = useRef<HTMLInputElement>(null)
 
   const stats = useMemo(() => {
     const barrios = new Map<string, Set<string>>()
@@ -137,6 +152,30 @@ export function DirectorioTecnicos({
     await onCreado(nuevo)
   }
 
+  async function handleImportarMatriz(file: File | undefined) {
+    if (!file) return
+    setImportando(true)
+    try {
+      // xlsx es pesado: se importa bajo demanda.
+      const { parsearMatrizExcel } = await import('../../services/excelParser')
+      const filas = await parsearMatrizExcel(file)
+      if (filas.length === 0) {
+        notificar('No se encontraron filas válidas en la matriz.', 'error')
+        return
+      }
+      const resultado = await importarMatrizDesdeExcel(filas)
+      await onCambio?.()
+      notificar(
+        `${resultado.tecnicosCreados} técnicos y ${resultado.reglasCreadas} reglas importadas con éxito.`,
+        'success',
+      )
+    } catch (e) {
+      notificar(e instanceof Error ? e.message : 'No se pudo importar la matriz.', 'error')
+    } finally {
+      setImportando(false)
+    }
+  }
+
   return (
     <>
       <section className="overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900 shadow-xl shadow-slate-900/20">
@@ -172,6 +211,31 @@ export function DirectorioTecnicos({
                 </button>
               ))}
             </div>
+
+            <button
+              type="button"
+              onClick={() => archivoMatrizRef.current?.click()}
+              disabled={importando}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-xs font-medium text-slate-300 transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {importando ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="size-4" />
+              )}
+              {importando ? 'Importando…' : 'Importar Matriz (Excel)'}
+            </button>
+            <input
+              ref={archivoMatrizRef}
+              type="file"
+              accept=".xlsx,.xls"
+              className="sr-only"
+              onChange={(e) => {
+                const archivo = e.target.files?.[0]
+                e.target.value = ''
+                void handleImportarMatriz(archivo)
+              }}
+            />
 
             <button
               type="button"

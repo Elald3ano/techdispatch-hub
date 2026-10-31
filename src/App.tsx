@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BarChart3, CodeXml, Database, FileText, Layers, Map as MapIcon, RefreshCw, ShieldCheck, ShieldAlert, SlidersHorizontal, TrendingUp, WifiOff } from 'lucide-react'
+import { BarChart3, CodeXml, Database, FileText, Layers, Map as MapIcon, RefreshCw, ShieldCheck, ShieldAlert, TrendingUp, WifiOff } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { DirectorioTecnicos } from './components/territorio/DirectorioTecnicos'
@@ -7,7 +7,6 @@ import { DetalleTecnicoTerritorio } from './components/territorio/DetalleTecnico
 import { AnaliticaDashboard } from './components/analitica/AnaliticaDashboard'
 import { AuditoriaCierresDashboard } from './components/cierres/AuditoriaCierresDashboard'
 import { ToastContainer, type Toast, type ToastVariant } from './components/ToastContainer'
-import { RulesManagerModal } from './components/RulesManagerModal'
 import { PdfExportModal } from './components/PdfExportModal'
 import { aplicarMatrizAsignacion } from './services/assignmentEngine'
 import { isSupabaseConfigured } from './lib/supabase'
@@ -42,7 +41,6 @@ function App() {
   const [conexion, setConexion] = useState<EstadoConexion>('conectando')
   const [toasts, setToasts] = useState<Toast[]>([])
   const toastId = useRef(0)
-  const [matrizAbierta, setMatrizAbierta] = useState(false)
   const [pdfAbierto, setPdfAbierto] = useState(false)
 
   // Navegación principal + Gestión Territorial
@@ -67,12 +65,6 @@ function App() {
 
   const descartarToast = useCallback((id: number) => {
     setToasts((prev) => prev.filter((t) => t.id !== id))
-  }, [])
-
-  const refrescarReglas = useCallback(async () => {
-    const [reglasData, tecnicosData] = await Promise.all([getReglas(), getTecnicos()])
-    setReglas(reglasData)
-    setTecnicos(tecnicosData)
   }, [])
 
   const cargarDatos = useCallback(
@@ -181,21 +173,6 @@ function App() {
     setTecnicoSeleccionadoId(null)
     await refrescarTerritorio()
   }, [refrescarTerritorio])
-
-  const reaplicarMatriz = useCallback(() => {
-    const reasignados = aplicarMatrizAsignacion(serviciosActivos, reglas)
-    const tecnicoPorOrden = new Map<string, string | null>()
-    for (const servicio of reasignados) {
-      tecnicoPorOrden.set(servicio.numero_orden, servicio.tecnico_id)
-    }
-    setServiciosActivos((prev) =>
-      prev.map((servicio) => {
-        const nuevoTecnico = tecnicoPorOrden.get(servicio.numero_orden)
-        return nuevoTecnico !== undefined ? { ...servicio, tecnico_id: nuevoTecnico } : servicio
-      }),
-    )
-    notificar('Matriz re-aplicada a los servicios en pantalla.', 'success')
-  }, [serviciosActivos, reglas, notificar])
 
   const handleSincronizar = useCallback(async () => {
     setSincronizando(true)
@@ -324,15 +301,6 @@ function App() {
               <IconoConexion className={cn('size-4', conexion === 'conectando' && 'animate-pulse')} />
               {conexionInfo.label}
             </span>
-
-            <button
-              type="button"
-              onClick={() => setMatrizAbierta(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white ring-1 ring-white/15 transition hover:bg-white/15"
-            >
-              <SlidersHorizontal className="size-4" />
-              Gestionar Matriz
-            </button>
 
             <button
               type="button"
@@ -484,21 +452,12 @@ function App() {
                 onSeleccionar={setTecnicoSeleccionadoId}
                 notificar={notificar}
                 onCreado={handleTecnicoCreado}
+                onCambio={refrescarTrasGuardarCuadrilla}
               />
             )}
           </>
         )}
       </main>
-
-      <RulesManagerModal
-        abierto={matrizAbierta}
-        onCerrar={() => setMatrizAbierta(false)}
-        reglas={reglas}
-        serviciosAbiertos={serviciosActivos}
-        onCambio={refrescarReglas}
-        notificar={notificar}
-        onReaplicar={reaplicarMatriz}
-      />
 
       <PdfExportModal
         abierto={pdfAbierto}
