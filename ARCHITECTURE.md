@@ -226,6 +226,18 @@ Solo conserva letras minúsculas y números, sin espacios ni símbolos. Es **det
 biyectiva en la práctica**: dos cadenas equivalentes producen la misma clave. Preserva códigos de
 zona legítimos (`"C1"` → `"c1"`), a diferencia de las variantes antiguas que sobre-limpaban.
 
+#### `limpiarBarrio` y `limpiarPrefijoNodo` — fusión de nodos comerciales
+
+`limpiarPrefijoNodo(barrio)` elimina el prefijo de nodo comercial de Sigma (1–4 letras + guion
+opcional + 1–3 dígitos + separador): `"JAMD-01 VILLA TATIANA"` → `"VILLA TATIANA"`,
+`"BV06 - El Jardin"` → `"El Jardin"`. Un barrio sin prefijo de nodo queda intacto
+(`"12 DE OCTUBRE"`).
+
+`limpiarBarrio(barrio)` = `limpiarTexto(limpiarPrefijoNodo(barrio))` **fusiona variantes de nodo
+dentro de la misma ciudad**: `"JAMD-01 VILLA TATIANA"` y `"JAMD-02 Villa Tatiana"` producen la misma
+clave `"villatatiana"`. No viola el namespace geográfico porque la **ciudad sigue siendo el prefijo
+obligatorio** de la clave (`limpiarTexto(ciudad)|…`), impidiendo cruces entre municipios.
+
 #### Motor de cascada — `src/services/assignmentEngine.ts`
 
 `aplicarMatrizAsignacion(servicios, reglas)` construye dos mapas y resuelve en orden estricto
@@ -233,11 +245,11 @@ zona legítimos (`"C1"` → `"c1"`), a diferencia de las variantes antiguas que 
 
 | Prioridad | Clave de cruce                                          | Requisito de regla          | Resultado                  |
 |-----------|---------------------------------------------------------|-----------------------------|----------------------------|
-| **P1**    | `${limpiarTexto(ciudad)}\|${limpiarTexto(barrio)}\|${limpiarTexto(servicio)}` | `barrio` **y** `tipo_servicio` no nulos | Técnico **Flotante** |
-| **P2**    | `${limpiarTexto(ciudad)}\|${limpiarTexto(barrio)}`      | `barrio` no nulo            | Técnico **General / Carro** |
+| **P1**    | `${limpiarTexto(ciudad)}\|${limpiarBarrio(barrio)}\|${limpiarTexto(servicio)}` | `barrio` **y** `tipo_servicio` no nulos | Técnico **Flotante** |
+| **P2**    | `${limpiarTexto(ciudad)}\|${limpiarBarrio(barrio)}`      | `barrio` no nulo            | Técnico **General / Carro** |
 | *(fallback)* | —                                                     | —                           | `null` (**sin asignar**)   |
 
-- La fórmula exacta de la clave de barrio es `` `${limpiarTexto(ciudad)}|${limpiarTexto(barrio)}` ``.
+- La fórmula exacta de la clave de barrio es `` `${limpiarTexto(ciudad)}|${limpiarBarrio(barrio)}` ``.
 - El resultado preserva el orden entrada → salida y emite el log
   `[Motor] Procesados: N | Asignados: X | Sin Asignar: Y`.
 - El antiguo fallback **Prioridad 3 (solo ciudad)** fue eliminado: una orden sin dueño de barrio
@@ -442,8 +454,10 @@ introduce inconsistencia silenciosa entre ingesta, asignación, despacho y PDF.
 
 1. **`limpiarTexto` es la única fuente de verdad de normalización.**
    Todo cruce geográfico (ciudad, barrio, servicio) usa `limpiarTexto` (`src/lib/normalizer.ts`).
-   Está prohibido introducir una segunda función de normalización o comparar cadenas crudas en
-   claves de asignación.
+   El barrio usa `limpiarBarrio` (= `limpiarTexto` tras quitar el prefijo de nodo comercial), que
+   fusiona variantes de nodo dentro de la misma ciudad sin tocar el prefijo de ciudad. Está
+   prohibido introducir una segunda función de normalización o comparar cadenas crudas en claves de
+   asignación.
 
 2. **La lista blanca de jurisdicción (27 sucursales) se aplica SIEMPRE en la ingesta.**
    Toda orden de una ciudad fuera de `SUCURSALES_AUTORIZADAS` se descarta en `parseServiciosExcel`

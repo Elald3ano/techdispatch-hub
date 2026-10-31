@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase'
 import { aplicarMatrizAsignacion, calcularPrioridad } from './assignmentEngine'
-import { limpiarTexto } from '../lib/normalizer'
+import { limpiarBarrio, limpiarTexto } from '../lib/normalizer'
 import { ciudadCanonica, esSucursalAutorizada } from '../lib/zonasPermitidas'
 import type { Database } from '../types/database'
 import type {
@@ -536,13 +536,13 @@ export async function asignarCuadrilla(
       throw new Error(`Error al leer reglas ajenas: ${readAjenoError.message}`)
     }
 
-    const barriosLimpios = new Set(barriosUnicos.map(limpiarTexto))
+    const barriosLimpios = new Set(barriosUnicos.map(limpiarBarrio))
     const idsAjenos = (reglasAjenas ?? [])
       .filter(
         (r) =>
           !r.tipo_servicio &&
           limpiarTexto(r.ciudad) === ciudadLimpia &&
-          barriosLimpios.has(limpiarTexto(r.barrio)),
+          barriosLimpios.has(limpiarBarrio(r.barrio)),
       )
       .map((r) => r.id)
 

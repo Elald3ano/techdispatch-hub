@@ -17,7 +17,7 @@ import {
   asignarCuadrilla,
   guardarCiudadesActivasTecnico,
 } from '../../services/supabaseService'
-import { limpiarTexto } from '../../lib/normalizer'
+import { limpiarBarrio, limpiarPrefijoNodo, limpiarTexto } from '../../lib/normalizer'
 import { TIPOS_SERVICIO_OFICIALES, TOTAL_TIPOS_SERVICIO } from '../../lib/tiposServicio'
 import { ciudadCanonica } from '../../lib/zonasPermitidas'
 import { cn } from '../../lib/utils'
@@ -74,8 +74,9 @@ function derivarConfigs(
     const canonica = ciudadCanonica(r.ciudad)
     if (!canonica) continue
     const ciudadKey = limpiarTexto(canonica)
-    const barrioKey = limpiarTexto(r.barrio)
-    const original = barriosPorCiudad.get(ciudadKey)?.get(barrioKey) ?? r.barrio
+    const barrioKey = limpiarBarrio(r.barrio)
+    const original =
+      barriosPorCiudad.get(ciudadKey)?.get(barrioKey) ?? limpiarPrefijoNodo(r.barrio)
 
     let grupo = porCiudad.get(canonica)
     if (!grupo) {
@@ -129,7 +130,9 @@ export function DetalleTecnicoTerritorio({
     return [...set].sort((a, b) => a.localeCompare(b))
   }, [reglas, servicios])
 
-  // Barrios por ciudad: Map<limpiarTexto(ciudad), Map<limpiarTexto(barrio), original>>.
+  // Barrios por ciudad: Map<limpiarTexto(ciudad), Map<limpiarBarrio(barrio), nombreLegible>>.
+  // La clave canónica `limpiarBarrio` fusiona variantes de nodo comercial
+  // (ej. "JAMD-01 VILLA TATIANA" y "JAMD-02 VILLA TATIANA" → "VILLA TATIANA").
   const barriosPorCiudad = useMemo(() => {
     const mapa = new Map<string, Map<string, string>>()
     const agregar = (ciudad: string, barrio: string) => {
@@ -138,10 +141,10 @@ export function DetalleTecnicoTerritorio({
       // barrios de reglas y órdenes converjan en una única pestaña.
       const canonica = ciudadCanonica(ciudad)
       const ck = limpiarTexto(canonica)
-      const bk = limpiarTexto(barrio)
+      const bk = limpiarBarrio(barrio)
       if (!ck || !bk) return
       const inner = mapa.get(ck) ?? new Map<string, string>()
-      if (!inner.has(bk)) inner.set(bk, barrio)
+      if (!inner.has(bk)) inner.set(bk, limpiarPrefijoNodo(barrio))
       mapa.set(ck, inner)
     }
     for (const r of reglas) {
@@ -159,7 +162,7 @@ export function DetalleTecnicoTerritorio({
     for (const r of reglas) {
       if (!r.barrio || r.tipo_servicio) continue
       if (r.tecnico_id === tecnico.id) continue
-      const clave = `${limpiarTexto(r.ciudad)}|${limpiarTexto(r.barrio)}`
+      const clave = `${limpiarTexto(r.ciudad)}|${limpiarBarrio(r.barrio)}`
       if (!mapa.has(clave)) mapa.set(clave, r.tecnico.nombre)
     }
     return mapa
@@ -585,7 +588,7 @@ export function DetalleTecnicoTerritorio({
                 <div className="flex flex-wrap gap-2">
                   {barriosLista.map((barrio) => {
                     const seleccionado = config.barrios.has(barrio)
-                    const ajeno = duenoGeneralAjeno.get(`${ciudadKey}|${limpiarTexto(barrio)}`)
+                    const ajeno = duenoGeneralAjeno.get(`${ciudadKey}|${limpiarBarrio(barrio)}`)
                     return (
                       <button
                         key={barrio}
