@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Bike, Truck } from 'lucide-react'
 import type { Servicio } from '../../types'
 import { esServicioLiviano } from '../../lib/tiposServicio'
@@ -55,16 +55,38 @@ export function RadarFlotantes({ servicios }: { servicios: Servicio[] }) {
     }
   }, [servicios])
 
+  const [filtroFlota, setFiltroFlota] = useState<'todos' | 'liviana' | 'pesada'>('todos')
+
+  const desgloseFiltrado = useMemo(() => {
+    if (filtroFlota === 'todos') return desglose
+    return desglose.filter((d) => (filtroFlota === 'liviana' ? d.liviano : !d.liviano))
+  }, [desglose, filtroFlota])
+
   return (
     <TarjetaAnalitica
       icon={Bike}
       titulo="Distribución de Servicios y Flota"
       subtitulo="Motos vs. Patrullas"
+      accion={
+        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-300 ring-1 ring-emerald-500/30 tabular-nums">
+          Total {total} órdenes analizadas
+        </span>
+      }
     >
       {/* Cabecera ejecutiva dual */}
       <div className="grid grid-cols-2 gap-3">
         {/* Cuadrilla liviana (motos) */}
-        <div className="rounded-xl bg-cyan-500/10 p-3 ring-1 ring-cyan-400/30">
+        <button
+          type="button"
+          onClick={() => setFiltroFlota((f) => (f === 'liviana' ? 'todos' : 'liviana'))}
+          aria-pressed={filtroFlota === 'liviana'}
+          className={cn(
+            'rounded-xl p-3 text-left transition',
+            filtroFlota === 'liviana'
+              ? 'bg-cyan-950/40 ring-2 ring-cyan-400'
+              : 'bg-cyan-500/10 ring-1 ring-cyan-400/30 hover:bg-cyan-500/20',
+          )}
+        >
           <div className="flex items-center gap-1.5">
             <Bike className="size-4 shrink-0 text-cyan-300" />
             <span className="truncate text-xs font-semibold text-cyan-200">
@@ -79,10 +101,20 @@ export function RadarFlotantes({ servicios }: { servicios: Servicio[] }) {
             El {porcentajeLivianos}% de los servicios se pueden resolver en moto.
           </p>
           <p className="text-[10px] text-slate-500">Trámites rápidos sin escalera</p>
-        </div>
+        </button>
 
         {/* Patrulla pesada (carro + escalera) */}
-        <div className="rounded-xl bg-slate-800/60 p-3 ring-1 ring-white/10">
+        <button
+          type="button"
+          onClick={() => setFiltroFlota((f) => (f === 'pesada' ? 'todos' : 'pesada'))}
+          aria-pressed={filtroFlota === 'pesada'}
+          className={cn(
+            'rounded-xl p-3 text-left transition',
+            filtroFlota === 'pesada'
+              ? 'bg-amber-950/40 ring-2 ring-amber-400'
+              : 'bg-slate-800/60 ring-1 ring-white/10 hover:bg-slate-700/60',
+          )}
+        >
           <div className="flex items-center gap-1.5">
             <Truck className="size-4 shrink-0 text-amber-300" />
             <span className="truncate text-xs font-semibold text-slate-300">
@@ -97,19 +129,23 @@ export function RadarFlotantes({ servicios }: { servicios: Servicio[] }) {
             El {porcentajePesados}% requiere patrulla pesada.
           </p>
           <p className="text-[10px] text-slate-500">Pareja con vehículo y escalera</p>
-        </div>
+        </button>
       </div>
 
       {/* Desglose del 100% de los servicios activos */}
       <div>
         <p className="mb-1.5 text-xs font-semibold text-slate-300">
-          Desglose del 100% de servicios activos
+          {filtroFlota === 'todos'
+            ? 'Desglose del 100% de servicios activos'
+            : filtroFlota === 'liviana'
+              ? 'Desglose de servicios livianos (moto)'
+              : 'Desglose de servicios pesados (patrulla)'}
         </p>
         <div className="max-h-80 space-y-2.5 overflow-y-auto pr-1.5">
-          {desglose.length === 0 ? (
+          {desgloseFiltrado.length === 0 ? (
             <p className="text-xs text-slate-500">Sin servicios en el ámbito seleccionado.</p>
           ) : (
-            desglose.map((d) => (
+            desgloseFiltrado.map((d) => (
               <div key={d.tipo}>
                 <div className="mb-1 flex items-center justify-between gap-2">
                   <span className="flex min-w-0 items-center gap-1.5">

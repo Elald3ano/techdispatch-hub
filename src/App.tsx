@@ -417,6 +417,7 @@ function App() {
                 procesando={procesando}
                 onProcesarReporte={handleProcesar}
                 notificar={notificar}
+                resultadoCierres={resultadoCierres}
               />
             ) : vistaActiva === 'cierres' ? (
               <AuditoriaCierresDashboard

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { BarChart3, MapPin, Upload } from 'lucide-react'
 import type { Servicio, Tecnico } from '../../types'
+import type { ResultadoCierres } from '../../services/reconciliationService'
 import type { ToastVariant } from '../ToastContainer'
 import { ciudadCanonica, esSucursalAutorizada } from '../../lib/zonasPermitidas'
 import { MultiSelectFilter, type MultiSelectOpcion } from '../MultiSelectFilter'
@@ -22,6 +23,7 @@ interface AnaliticaDashboardProps {
   procesando: boolean
   onProcesarReporte: (file: File, ciudadFiltro: string | undefined) => Promise<boolean>
   notificar: (mensaje: string, variant?: ToastVariant) => void
+  resultadoCierres: ResultadoCierres | null
 }
 
 /**
@@ -35,6 +37,7 @@ export function AnaliticaDashboard({
   procesando,
   onProcesarReporte,
   notificar,
+  resultadoCierres,
 }: AnaliticaDashboardProps) {
   const [sucursalesSeleccionadas, setSucursalesSeleccionadas] = useState<string[]>([])
   const [tecnicoSeleccionadoId, setTecnicoSeleccionadoId] = useState<string | null>(null)
@@ -198,7 +201,11 @@ export function AnaliticaDashboard({
       {/* Cards complementarias */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <RadarFlotantes servicios={serviciosFiltrados} />
-        <ControlCalidad servicios={serviciosFiltrados} />
+        <ControlCalidad
+          servicios={serviciosFiltrados}
+          tecnicos={tecnicos}
+          resultadoCierres={resultadoCierres}
+        />
       </div>
 
       {/* Modal de carga rápida del reporte diario */}
