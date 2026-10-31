@@ -12,6 +12,9 @@ import { RadarFlotantes } from './RadarFlotantes'
 import { ControlCalidad } from './ControlCalidad'
 import { RadiografiaTecnico } from './RadiografiaTecnico'
 
+/** Id sintético que representa las órdenes sin técnico asignado. */
+const SIN_ASIGNAR_ID = 'sin_asignar'
+
 interface AnaliticaDashboardProps {
   servicios: Servicio[]
   tecnicos: Tecnico[]
@@ -35,6 +38,8 @@ export function AnaliticaDashboard({
 }: AnaliticaDashboardProps) {
   const [sucursalesSeleccionadas, setSucursalesSeleccionadas] = useState<string[]>([])
   const [tecnicoSeleccionadoId, setTecnicoSeleccionadoId] = useState<string | null>(null)
+  // Ciudad de las órdenes sin asignar (solo aplica cuando `tecnicoSeleccionadoId === 'sin_asignar'`).
+  const [sinAsignarCiudad, setSinAsignarCiudad] = useState<string | null>(null)
   const [barrioExpandido, setBarrioExpandido] = useState<string | null>(null)
   const [modalCargaAbierto, setModalCargaAbierto] = useState(false)
 
@@ -64,24 +69,49 @@ export function AnaliticaDashboard({
     )
   }, [serviciosAutorizados, sucursalesSeleccionadas])
 
-  const tecnicoSeleccionado = useMemo(
-    () => tecnicos.find((t) => t.id === tecnicoSeleccionadoId) ?? null,
-    [tecnicos, tecnicoSeleccionadoId],
-  )
+  const tecnicoSeleccionado = useMemo(() => {
+    if (tecnicoSeleccionadoId === SIN_ASIGNAR_ID) {
+      return { id: SIN_ASIGNAR_ID, nombre: 'Sin Asignar', activo: true } satisfies Tecnico
+    }
+    return tecnicos.find((t) => t.id === tecnicoSeleccionadoId) ?? null
+  }, [tecnicos, tecnicoSeleccionadoId])
 
   const serviciosDelTecnico = useMemo(() => {
     if (!tecnicoSeleccionadoId) return []
+    if (tecnicoSeleccionadoId === SIN_ASIGNAR_ID) {
+      return serviciosFiltrados.filter(
+        (s) =>
+          s.tecnico_id === null &&
+          (!sinAsignarCiudad || ciudadCanonica(s.ciudad) === sinAsignarCiudad),
+      )
+    }
     return serviciosFiltrados.filter((s) => s.tecnico_id === tecnicoSeleccionadoId)
-  }, [serviciosFiltrados, tecnicoSeleccionadoId])
+  }, [serviciosFiltrados, tecnicoSeleccionadoId, sinAsignarCiudad])
 
   // Conmuta la selección de técnico (clic de nuevo = deseleccionar).
   const toggleTecnico = (id: string) => {
     setBarrioExpandido(null)
+    setSinAsignarCiudad(null)
     setTecnicoSeleccionadoId((prev) => (prev === id ? null : id))
+  }
+
+  // Selecciona las órdenes sin asignar: global (ciudad null) o de una sucursal.
+  const seleccionarSinAsignar = (ciudad: string | null) => {
+    setBarrioExpandido(null)
+    const yaSeleccionado =
+      tecnicoSeleccionadoId === SIN_ASIGNAR_ID && sinAsignarCiudad === ciudad
+    if (yaSeleccionado) {
+      setTecnicoSeleccionadoId(null)
+      setSinAsignarCiudad(null)
+    } else {
+      setTecnicoSeleccionadoId(SIN_ASIGNAR_ID)
+      setSinAsignarCiudad(ciudad)
+    }
   }
 
   const verVistaGlobal = () => {
     setTecnicoSeleccionadoId(null)
+    setSinAsignarCiudad(null)
     setBarrioExpandido(null)
   }
 
@@ -142,7 +172,9 @@ export function AnaliticaDashboard({
             tecnicos={tecnicos}
             ciudadesActivas={ciudadesActivas}
             tecnicoSeleccionadoId={tecnicoSeleccionadoId}
+            sinAsignarCiudadSeleccionada={sinAsignarCiudad}
             onToggleTecnico={toggleTecnico}
+            onSeleccionarSinAsignar={seleccionarSinAsignar}
           />
         </div>
 

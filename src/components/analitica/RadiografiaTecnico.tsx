@@ -94,6 +94,10 @@ export function RadiografiaTecnico({
 
   const total = servicios.length
 
+  // Modo "Sin Asignar": el Centro de Mando envía un técnico sintético para las
+  // órdenes huérfanas; lo detectamos por su id o su nombre.
+  const esModoSinAsignar = tecnico.id === 'sin_asignar' || tecnico.nombre === 'Sin Asignar'
+
   // Desglose por tipo de servicio (siempre sobre el total del técnico, Invariante #1).
   const desgloseServicios = useMemo(() => {
     const porTipo = new Map<string, { clave: string; label: string; cantidad: number }>()
@@ -305,11 +309,13 @@ export function RadiografiaTecnico({
           </span>
           <div className="min-w-0">
             <h3 className="flex flex-wrap items-center gap-2 text-base font-bold text-white">
-              <span className="truncate">{tecnico.nombre}</span>
+              <span className="truncate">
+                {esModoSinAsignar ? '⚠️ Órdenes Sin Asignar' : tecnico.nombre}
+              </span>
               <span
                 className={cn(
                   'rounded-full px-2 py-0.5 text-xs font-semibold ring-1 tabular-nums',
-                  umbralDias !== null
+                  esModoSinAsignar || umbralDias !== null
                     ? 'bg-amber-500/15 text-amber-200 ring-amber-500/30'
                     : 'bg-white/10 text-slate-200 ring-white/15',
                 )}
@@ -319,7 +325,11 @@ export function RadiografiaTecnico({
                   : `${total} órdenes`}
               </span>
             </h3>
-            <p className="text-xs text-slate-400">Radiografía por zona del técnico</p>
+            <p className="text-xs text-slate-400">
+              {esModoSinAsignar
+                ? 'Órdenes huérfanas que requieren asignación territorial'
+                : 'Radiografía por zona del técnico'}
+            </p>
           </div>
         </div>
 
@@ -445,7 +455,9 @@ export function RadiografiaTecnico({
             <p className="text-[11px] font-semibold tracking-wide text-cyan-300 uppercase">
               MillaOps Hub · Radiografía de despacho
             </p>
-            <p className="truncate text-base font-bold text-white">{tecnico.nombre}</p>
+            <p className="truncate text-base font-bold text-white">
+              {esModoSinAsignar ? 'Órdenes Sin Asignar' : tecnico.nombre}
+            </p>
             <p className="text-[11px] text-slate-400">
               {[...new Set(serviciosFiltrados.map((s) => s.ciudad))].sort().join(', ') ||
                 'Sin ciudad'}

@@ -47,6 +47,7 @@ interface ResumenCiudad {
   clave: string
   ciudad: string
   total: number
+  sinAsignar: number
   tecnicos: TecnicoEnCiudad[]
 }
 
@@ -77,7 +78,9 @@ interface BalanceCuadrillasProps {
   tecnicos: Tecnico[]
   ciudadesActivas: Record<string, string[]>
   tecnicoSeleccionadoId: string | null
+  sinAsignarCiudadSeleccionada: string | null
   onToggleTecnico: (id: string) => void
+  onSeleccionarSinAsignar: (ciudad: string | null) => void
 }
 
 /** Balance y saturación de cuadrillas dentro del ámbito seleccionado. */
@@ -86,7 +89,9 @@ export function BalanceCuadrillas({
   tecnicos,
   ciudadesActivas,
   tecnicoSeleccionadoId,
+  sinAsignarCiudadSeleccionada,
   onToggleTecnico,
+  onSeleccionarSinAsignar,
 }: BalanceCuadrillasProps) {
   const [modoVista, setModoVista] = useState<ModoVista>('sucursales')
 
@@ -95,11 +100,22 @@ export function BalanceCuadrillas({
     [tecnicos],
   )
 
+  // Órdenes sin técnico asignado: siempre auditables desde el ranking.
+  const totalSinAsignar = useMemo(
+    () => servicios.filter((s) => s.tecnico_id === null).length,
+    [servicios],
+  )
+
   // Agrupación jerárquica por ciudad (vista "sucursales").
   const resumenCiudades = useMemo<ResumenCiudad[]>(() => {
     const porCiudad = new Map<
       string,
-      { ciudad: string; total: number; porTecnico: Map<string, TecnicoEnCiudad> }
+      {
+        ciudad: string
+        total: number
+        sinAsignar: number
+        porTecnico: Map<string, TecnicoEnCiudad>
+      }
     >()
 
     for (const s of servicios) {
@@ -108,7 +124,7 @@ export function BalanceCuadrillas({
       if (!clave) continue
       let ciudad = porCiudad.get(clave)
       if (!ciudad) {
-        ciudad = { ciudad: canonica, total: 0, porTecnico: new Map() }
+        ciudad = { ciudad: canonica, total: 0, sinAsignar: 0, porTecnico: new Map() }
         porCiudad.set(clave, ciudad)
       }
       ciudad.total += 1
@@ -126,6 +142,8 @@ export function BalanceCuadrillas({
         if (esServicioLiviano(s.tipo_servicio)) prev.livianos += 1
         else prev.pesados += 1
         ciudad.porTecnico.set(s.tecnico_id, prev)
+      } else {
+        ciudad.sinAsignar += 1
       }
     }
 
@@ -134,6 +152,7 @@ export function BalanceCuadrillas({
         clave: limpiarTexto(c.ciudad),
         ciudad: c.ciudad,
         total: c.total,
+        sinAsignar: c.sinAsignar,
         tecnicos: [...c.porTecnico.values()]
           .map((t) => ({ ...t, carga: clasificarCarga(t.total) }))
           .sort((a, b) => b.total - a.total),
@@ -269,6 +288,31 @@ export function BalanceCuadrillas({
 
                     {expandida && (
                       <div className="border-t border-white/10 p-2">
+                        {c.sinAsignar > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => onSeleccionarSinAsignar(c.ciudad)}
+                            aria-pressed={
+                              tecnicoSeleccionadoId === 'sin_asignar' &&
+                              sinAsignarCiudadSeleccionada === c.ciudad
+                            }
+                            className={cn(
+                              'mb-2 flex w-full cursor-pointer items-center justify-between rounded-lg border p-2.5 text-left transition-all',
+                              tecnicoSeleccionadoId === 'sin_asignar' &&
+                                sinAsignarCiudadSeleccionada === c.ciudad
+                                ? 'border-amber-500 bg-amber-950/40'
+                                : 'border-amber-800/60 bg-amber-950/30 hover:bg-amber-950/50',
+                            )}
+                          >
+                            <span className="flex items-center gap-2 text-xs font-semibold text-amber-300">
+                              <AlertTriangle className="size-4 text-amber-400" />
+                              <span>Sin Asignar en {c.ciudad}</span>
+                            </span>
+                            <span className="rounded-full bg-amber-900/50 px-2 py-0.5 text-xs font-bold text-amber-400">
+                              {c.sinAsignar}
+                            </span>
+                          </button>
+                        )}
                         {c.tecnicos.length === 0 ? (
                           <p className="px-2.5 py-2 text-xs text-slate-500">
                             Sin técnicos con órdenes en esta ciudad.
@@ -327,10 +371,42 @@ export function BalanceCuadrillas({
       ) : (
         /* ---- Vista por técnico (ranking plano) ---- */
         <div>
-          {ranking.length === 0 ? (
-            <p className="text-xs text-slate-400">Sin órdenes asignadas en el ámbito seleccionado.</p>
+          {ranking.length === 0 && totalSinAsignar === 0 ? (
+            <p className="text-xs text-slate-400">Sin órdenes en el ámbito seleccionado.</p>
           ) : (
             <ul className="space-y-1.5">
+              {totalSinAsignar > 0 && (
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => onSeleccionarSinAsignar(null)}
+                    aria-pressed={
+                      tecnicoSeleccionadoId === 'sin_asignar' &&
+                      sinAsignarCiudadSeleccionada === null
+                    }
+                    className={cn(
+                      'w-full rounded-xl px-3 py-2 text-left transition-all',
+                      tecnicoSeleccionadoId === 'sin_asignar' &&
+                        sinAsignarCiudadSeleccionada === null
+                        ? 'bg-amber-500/10 ring-2 ring-amber-400/70'
+                        : 'cursor-pointer hover:bg-slate-800/60',
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="inline-flex items-center gap-2 text-sm font-semibold text-amber-300">
+                        <AlertTriangle className="size-3.5" />
+                        Total Sin Asignar
+                      </span>
+                      <span className="text-sm font-bold text-amber-300 tabular-nums">
+                        {totalSinAsignar}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-[11px] text-amber-200/70">
+                      {totalSinAsignar} órdenes sin técnico asignado
+                    </p>
+                  </button>
+                </li>
+              )}
               {ranking.map((r) => {
                 const cfg = CARGA_CONFIG[r.carga]
                 const seleccionado = tecnicoSeleccionadoId === r.tecnico.id
