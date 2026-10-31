@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import {
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   Building2,
   ChevronDown,
   ChevronRight,
@@ -94,6 +96,7 @@ export function BalanceCuadrillas({
   onSeleccionarSinAsignar,
 }: BalanceCuadrillasProps) {
   const [modoVista, setModoVista] = useState<ModoVista>('sucursales')
+  const [direccionOrden, setDireccionOrden] = useState<'desc' | 'asc'>('desc')
 
   const tecnicosPorId = useMemo(
     () => new Map(tecnicos.map((t) => [t.id, t] as const)),
@@ -108,6 +111,7 @@ export function BalanceCuadrillas({
 
   // Agrupación jerárquica por ciudad (vista "sucursales").
   const resumenCiudades = useMemo<ResumenCiudad[]>(() => {
+    const factor = direccionOrden === 'asc' ? 1 : -1
     const porCiudad = new Map<
       string,
       {
@@ -155,13 +159,14 @@ export function BalanceCuadrillas({
         sinAsignar: c.sinAsignar,
         tecnicos: [...c.porTecnico.values()]
           .map((t) => ({ ...t, carga: clasificarCarga(t.total) }))
-          .sort((a, b) => b.total - a.total),
+          .sort((a, b) => (a.total - b.total) * factor),
       }))
-      .sort((a, b) => b.total - a.total)
-  }, [servicios, tecnicosPorId])
+      .sort((a, b) => (a.total - b.total) * factor)
+  }, [servicios, tecnicosPorId, direccionOrden])
 
   // Ranking plano por técnico (vista "tecnicos").
   const { ranking, sinOrdenes } = useMemo(() => {
+    const factor = direccionOrden === 'asc' ? 1 : -1
     const acumulado = new Map<
       string,
       { tecnico: Tecnico; total: number; livianos: number; pesados: number; ciudades: Set<string> }
@@ -194,7 +199,7 @@ export function BalanceCuadrillas({
         carga: clasificarCarga(r.total),
         ciudadesTexto: formatearCiudades(r.ciudades, ciudadesActivas[r.tecnico.id]),
       }))
-      .sort((a, b) => b.total - a.total)
+      .sort((a, b) => (a.total - b.total) * factor)
 
     const asignadosIds = new Set(acumulado.keys())
     const sinOrdenes: TecnicoSinOrdenes[] = tecnicos
@@ -205,7 +210,7 @@ export function BalanceCuadrillas({
       }))
 
     return { ranking, sinOrdenes }
-  }, [servicios, tecnicos, ciudadesActivas, tecnicosPorId])
+  }, [servicios, tecnicos, ciudadesActivas, tecnicosPorId, direccionOrden])
 
   // Todas las ciudades comienzan colapsadas por defecto.
   const [sucursalExpandida, setSucursalExpandida] = useState<string | null>(null)
@@ -220,32 +225,54 @@ export function BalanceCuadrillas({
       titulo="Balance y Saturación de Cuadrillas"
       subtitulo={`${resumenCiudades.length} sucursales · ${ranking.length} técnicos`}
       accion={
-        <div className="flex shrink-0 gap-1 rounded-lg bg-white/5 p-1 ring-1 ring-white/10">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="flex gap-1 rounded-lg bg-white/5 p-1 ring-1 ring-white/10">
+            <button
+              type="button"
+              onClick={() => setModoVista('sucursales')}
+              aria-pressed={modoVista === 'sucursales'}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition',
+                modoVista === 'sucursales'
+                  ? 'bg-slate-700 text-white'
+                  : 'text-slate-400 hover:text-slate-200',
+              )}
+            >
+              <Building2 className="size-3.5" /> Por Sucursal
+            </button>
+            <button
+              type="button"
+              onClick={() => setModoVista('tecnicos')}
+              aria-pressed={modoVista === 'tecnicos'}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition',
+                modoVista === 'tecnicos'
+                  ? 'bg-slate-700 text-white'
+                  : 'text-slate-400 hover:text-slate-200',
+              )}
+            >
+              <Users className="size-3.5" /> Ranking Técnicos
+            </button>
+          </div>
+
+          {/* Orden por carga */}
           <button
             type="button"
-            onClick={() => setModoVista('sucursales')}
-            aria-pressed={modoVista === 'sucursales'}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition',
-              modoVista === 'sucursales'
-                ? 'bg-slate-700 text-white'
-                : 'text-slate-400 hover:text-slate-200',
-            )}
+            onClick={() => setDireccionOrden((d) => (d === 'desc' ? 'asc' : 'desc'))}
+            aria-pressed={direccionOrden === 'asc'}
+            title={
+              direccionOrden === 'desc'
+                ? 'Ordenar de mayor a menor carga'
+                : 'Ordenar de menor a mayor carga'
+            }
+            className="inline-flex items-center gap-1.5 rounded-lg bg-white/5 px-2.5 py-1.5 text-xs font-medium text-slate-300 ring-1 ring-white/10 transition hover:bg-white/10 hover:text-white"
           >
-            <Building2 className="size-3.5" /> Por Sucursal
-          </button>
-          <button
-            type="button"
-            onClick={() => setModoVista('tecnicos')}
-            aria-pressed={modoVista === 'tecnicos'}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition',
-              modoVista === 'tecnicos'
-                ? 'bg-slate-700 text-white'
-                : 'text-slate-400 hover:text-slate-200',
+            {direccionOrden === 'desc' ? (
+              <ArrowDown className="size-3.5" />
+            ) : (
+              <ArrowUp className="size-3.5" />
             )}
-          >
-            <Users className="size-3.5" /> Ranking Técnicos
+            {direccionOrden === 'desc' ? 'Mayor carga' : 'Menor carga'}
           </button>
         </div>
       }
