@@ -40,8 +40,9 @@ export function AnaliticaDashboard({
   resultadoCierres,
 }: AnaliticaDashboardProps) {
   const [sucursalesSeleccionadas, setSucursalesSeleccionadas] = useState<string[]>([])
-  const [tecnicoSeleccionadoId, setTecnicoSeleccionadoId] = useState<string | null>(null)
-  // Ciudad de las órdenes sin asignar (solo aplica cuando `tecnicoSeleccionadoId === 'sin_asignar'`).
+  // Selección múltiple de técnicos; puede incluir 'sin_asignar' como pseudo-técnico.
+  const [tecnicosSeleccionadosIds, setTecnicosSeleccionadosIds] = useState<string[]>([])
+  // Ciudad de las órdenes sin asignar (solo aplica cuando 'sin_asignar' está seleccionado).
   const [sinAsignarCiudad, setSinAsignarCiudad] = useState<string | null>(null)
   const [barrioExpandido, setBarrioExpandido] = useState<string | null>(null)
   const [modalCargaAbierto, setModalCargaAbierto] = useState(false)
@@ -72,50 +73,76 @@ export function AnaliticaDashboard({
     )
   }, [serviciosAutorizados, sucursalesSeleccionadas])
 
-  const tecnicoSeleccionado = useMemo(() => {
-    if (tecnicoSeleccionadoId === SIN_ASIGNAR_ID) {
-      return { id: SIN_ASIGNAR_ID, nombre: 'Sin Asignar', activo: true } satisfies Tecnico
+  // Resuelve los IDs seleccionados a objetos `Tecnico` (sintético para 'sin_asignar').
+  const tecnicosSeleccionados = useMemo<Tecnico[]>(() => {
+    const resultado: Tecnico[] = []
+    for (const id of tecnicosSeleccionadosIds) {
+      if (id === SIN_ASIGNAR_ID) {
+        resultado.push({ id: SIN_ASIGNAR_ID, nombre: 'Sin Asignar', activo: true })
+        continue
+      }
+      const t = tecnicos.find((x) => x.id === id)
+      if (t) resultado.push(t)
     }
-    return tecnicos.find((t) => t.id === tecnicoSeleccionadoId) ?? null
-  }, [tecnicos, tecnicoSeleccionadoId])
+    return resultado
+  }, [tecnicos, tecnicosSeleccionadosIds])
 
-  const serviciosDelTecnico = useMemo(() => {
-    if (!tecnicoSeleccionadoId) return []
-    if (tecnicoSeleccionadoId === SIN_ASIGNAR_ID) {
-      return serviciosFiltrados.filter(
-        (s) =>
-          s.tecnico_id === null &&
-          (!sinAsignarCiudad || ciudadCanonica(s.ciudad) === sinAsignarCiudad),
-      )
-    }
-    return serviciosFiltrados.filter((s) => s.tecnico_id === tecnicoSeleccionadoId)
-  }, [serviciosFiltrados, tecnicoSeleccionadoId, sinAsignarCiudad])
+  // Órdenes de TODOS los técnicos seleccionados (unión de sus despachos).
+  const serviciosSeleccionados = useMemo(() => {
+    if (tecnicosSeleccionadosIds.length === 0) return []
+    const set = new Set(tecnicosSeleccionadosIds)
+    const incluyeSinAsignar = set.has(SIN_ASIGNAR_ID)
+    return serviciosFiltrados.filter((s) => {
+      if (s.tecnico_id === null) {
+        if (!incluyeSinAsignar) return false
+        return !sinAsignarCiudad || ciudadCanonica(s.ciudad) === sinAsignarCiudad
+      }
+      return set.has(s.tecnico_id)
+    })
+  }, [serviciosFiltrados, tecnicosSeleccionadosIds, sinAsignarCiudad])
 
-  // Conmuta la selección de técnico (clic de nuevo = deseleccionar).
+  // Añade o remueve un técnico de la selección múltiple.
   const toggleTecnico = (id: string) => {
     setBarrioExpandido(null)
-    setSinAsignarCiudad(null)
-    setTecnicoSeleccionadoId((prev) => (prev === id ? null : id))
+    if (id === SIN_ASIGNAR_ID) setSinAsignarCiudad(null)
+    setTecnicosSeleccionadosIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    )
   }
 
-  // Selecciona las órdenes sin asignar: global (ciudad null) o de una sucursal.
-  const seleccionarSinAsignar = (ciudad: string | null) => {
+  // Sin Asignar de una sucursal específica (selección aislada con alcance de ciudad).
+  const seleccionarSinAsignarCiudad = (ciudad: string) => {
     setBarrioExpandido(null)
-    const yaSeleccionado =
-      tecnicoSeleccionadoId === SIN_ASIGNAR_ID && sinAsignarCiudad === ciudad
-    if (yaSeleccionado) {
-      setTecnicoSeleccionadoId(null)
-      setSinAsignarCiudad(null)
-    } else {
-      setTecnicoSeleccionadoId(SIN_ASIGNAR_ID)
-      setSinAsignarCiudad(ciudad)
-    }
+    setTecnicosSeleccionadosIds([SIN_ASIGNAR_ID])
+    setSinAsignarCiudad(ciudad)
   }
 
-  const verVistaGlobal = () => {
-    setTecnicoSeleccionadoId(null)
-    setSinAsignarCiudad(null)
+  // Selecciona todos los técnicos con órdenes en una ciudad.
+  const seleccionarTodosDeCiudad = (ciudad: string) => {
     setBarrioExpandido(null)
+    const ids = new Set(
+      serviciosFiltrados
+        .filter((s) => s.tecnico_id && ciudadCanonica(s.ciudad) === ciudad)
+        .map((s) => s.tecnico_id as string),
+    )
+    setTecnicosSeleccionadosIds((prev) => [...new Set([...prev, ...ids])])
+  }
+
+  // Quita los técnicos con órdenes en una ciudad.
+  const deseleccionarTodosDeCiudad = (ciudad: string) => {
+    const ids = new Set(
+      serviciosFiltrados
+        .filter((s) => s.tecnico_id && ciudadCanonica(s.ciudad) === ciudad)
+        .map((s) => s.tecnico_id as string),
+    )
+    setTecnicosSeleccionadosIds((prev) => prev.filter((id) => !ids.has(id)))
+  }
+
+  // Resetea la selección (vuelve a la vista global).
+  const limpiarSeleccionTecnicos = () => {
+    setBarrioExpandido(null)
+    setSinAsignarCiudad(null)
+    setTecnicosSeleccionadosIds([])
   }
 
   const toggleBarrio = (clave: string) => {
@@ -174,22 +201,25 @@ export function AnaliticaDashboard({
             servicios={serviciosFiltrados}
             tecnicos={tecnicos}
             ciudadesActivas={ciudadesActivas}
-            tecnicoSeleccionadoId={tecnicoSeleccionadoId}
+            tecnicosSeleccionadosIds={tecnicosSeleccionadosIds}
             sinAsignarCiudadSeleccionada={sinAsignarCiudad}
             onToggleTecnico={toggleTecnico}
-            onSeleccionarSinAsignar={seleccionarSinAsignar}
+            onSeleccionarSinAsignarCiudad={seleccionarSinAsignarCiudad}
+            onSeleccionarTodosDeCiudad={seleccionarTodosDeCiudad}
+            onDeseleccionarTodosDeCiudad={deseleccionarTodosDeCiudad}
+            onLimpiarSeleccion={limpiarSeleccionTecnicos}
           />
         </div>
 
         <div className="lg:col-span-8">
-          {tecnicoSeleccionado ? (
+          {tecnicosSeleccionados.length > 0 ? (
             <RadiografiaTecnico
-              key={tecnicoSeleccionado.id}
-              tecnico={tecnicoSeleccionado}
-              servicios={serviciosDelTecnico}
+              key={tecnicosSeleccionadosIds.join(',')}
+              tecnicos={tecnicosSeleccionados}
+              servicios={serviciosSeleccionados}
               barrioExpandido={barrioExpandido}
               onToggleBarrio={toggleBarrio}
-              onVerVistaGlobal={verVistaGlobal}
+              onVerVistaGlobal={limpiarSeleccionTecnicos}
               notificar={notificar}
             />
           ) : (

@@ -4,6 +4,7 @@ import {
   ArrowDown,
   ArrowUp,
   Building2,
+  Check,
   ChevronDown,
   ChevronRight,
   MapPin,
@@ -79,10 +80,13 @@ interface BalanceCuadrillasProps {
   servicios: Servicio[]
   tecnicos: Tecnico[]
   ciudadesActivas: Record<string, string[]>
-  tecnicoSeleccionadoId: string | null
+  tecnicosSeleccionadosIds: string[]
   sinAsignarCiudadSeleccionada: string | null
   onToggleTecnico: (id: string) => void
-  onSeleccionarSinAsignar: (ciudad: string | null) => void
+  onSeleccionarSinAsignarCiudad: (ciudad: string) => void
+  onSeleccionarTodosDeCiudad: (ciudad: string) => void
+  onDeseleccionarTodosDeCiudad: (ciudad: string) => void
+  onLimpiarSeleccion: () => void
 }
 
 /** Balance y saturación de cuadrillas dentro del ámbito seleccionado. */
@@ -90,10 +94,13 @@ export function BalanceCuadrillas({
   servicios,
   tecnicos,
   ciudadesActivas,
-  tecnicoSeleccionadoId,
+  tecnicosSeleccionadosIds,
   sinAsignarCiudadSeleccionada,
   onToggleTecnico,
-  onSeleccionarSinAsignar,
+  onSeleccionarSinAsignarCiudad,
+  onSeleccionarTodosDeCiudad,
+  onDeseleccionarTodosDeCiudad,
+  onLimpiarSeleccion,
 }: BalanceCuadrillasProps) {
   const [modoVista, setModoVista] = useState<ModoVista>('sucursales')
   const [direccionOrden, setDireccionOrden] = useState<'desc' | 'asc'>('desc')
@@ -226,6 +233,21 @@ export function BalanceCuadrillas({
       subtitulo={`${resumenCiudades.length} sucursales · ${ranking.length} técnicos`}
       accion={
         <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {tecnicosSeleccionadosIds.length > 0 && (
+            <span className="inline-flex items-center gap-2 rounded-lg bg-cyan-500/15 px-3 py-1.5 text-xs font-semibold text-cyan-200 ring-1 ring-cyan-500/30">
+              {tecnicosSeleccionadosIds.length}{' '}
+              {tecnicosSeleccionadosIds.length === 1
+                ? 'técnico seleccionado'
+                : 'técnicos seleccionados'}
+              <button
+                type="button"
+                onClick={onLimpiarSeleccion}
+                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-cyan-200/80 transition hover:bg-cyan-500/20 hover:text-white"
+              >
+                ✕ Limpiar
+              </button>
+            </span>
+          )}
           <div className="flex gap-1 rounded-lg bg-white/5 p-1 ring-1 ring-white/10">
             <button
               type="button"
@@ -318,14 +340,14 @@ export function BalanceCuadrillas({
                         {c.sinAsignar > 0 && (
                           <button
                             type="button"
-                            onClick={() => onSeleccionarSinAsignar(c.ciudad)}
+                            onClick={() => onSeleccionarSinAsignarCiudad(c.ciudad)}
                             aria-pressed={
-                              tecnicoSeleccionadoId === 'sin_asignar' &&
+                              tecnicosSeleccionadosIds.includes('sin_asignar') &&
                               sinAsignarCiudadSeleccionada === c.ciudad
                             }
                             className={cn(
                               'mb-2 flex w-full cursor-pointer items-center justify-between rounded-lg border p-2.5 text-left transition-all',
-                              tecnicoSeleccionadoId === 'sin_asignar' &&
+                              tecnicosSeleccionadosIds.includes('sin_asignar') &&
                                 sinAsignarCiudadSeleccionada === c.ciudad
                                 ? 'border-amber-500 bg-amber-950/40'
                                 : 'border-amber-800/60 bg-amber-950/30 hover:bg-amber-950/50',
@@ -345,47 +367,77 @@ export function BalanceCuadrillas({
                             Sin técnicos con órdenes en esta ciudad.
                           </p>
                         ) : (
-                          <ul className="space-y-1">
-                            {c.tecnicos.map((t) => {
-                              const cfg = CARGA_CONFIG[t.carga]
-                              const seleccionado = tecnicoSeleccionadoId === t.tecnicoId
-                              return (
-                                <li key={t.tecnicoId}>
-                                  <button
-                                    type="button"
-                                    onClick={() => onToggleTecnico(t.tecnicoId)}
-                                    aria-pressed={seleccionado}
-                                    className={cn(
-                                      'w-full rounded-lg px-2.5 py-2 text-left transition-all',
-                                      seleccionado
-                                        ? 'bg-cyan-500/10 ring-2 ring-cyan-400/70'
-                                        : 'cursor-pointer hover:bg-slate-800/60',
-                                    )}
-                                  >
-                                    <div className="mb-1 flex items-center justify-between gap-2">
-                                      <div className="flex min-w-0 items-center gap-2">
-                                        <span className="truncate text-sm font-medium text-slate-200">
-                                          {t.nombre}
-                                        </span>
-                                        {t.carga === 'saturado' && (
-                                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] font-semibold text-red-300 ring-1 ring-red-500/30">
-                                            <AlertTriangle className="size-3" /> Sobrecargado
+                          <>
+                            <div className="mb-1.5 flex items-center justify-between gap-2">
+                              <button
+                                type="button"
+                                onClick={() => onSeleccionarTodosDeCiudad(c.ciudad)}
+                                className="inline-flex items-center gap-1 rounded-md border border-slate-600 px-2 py-1 text-[11px] font-medium text-slate-300 transition hover:bg-slate-800"
+                              >
+                                ☑️ Seleccionar todos en {c.ciudad}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onDeseleccionarTodosDeCiudad(c.ciudad)}
+                                className="rounded-md border border-slate-600 px-2 py-1 text-[11px] font-medium text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
+                              >
+                                Desmarcar
+                              </button>
+                            </div>
+                            <ul className="space-y-1">
+                              {c.tecnicos.map((t) => {
+                                const cfg = CARGA_CONFIG[t.carga]
+                                const seleccionado = tecnicosSeleccionadosIds.includes(t.tecnicoId)
+                                return (
+                                  <li key={t.tecnicoId}>
+                                    <button
+                                      type="button"
+                                      onClick={() => onToggleTecnico(t.tecnicoId)}
+                                      aria-pressed={seleccionado}
+                                      className={cn(
+                                        'w-full rounded-lg px-2.5 py-2 text-left transition-all',
+                                        seleccionado
+                                          ? 'bg-cyan-500/10 ring-2 ring-cyan-400/70'
+                                          : 'cursor-pointer hover:bg-slate-800/60',
+                                      )}
+                                    >
+                                      <div className="mb-1 flex items-center justify-between gap-2">
+                                        <div className="flex min-w-0 items-center gap-2">
+                                          <span
+                                            className={cn(
+                                              'flex size-4 shrink-0 items-center justify-center rounded border transition',
+                                              seleccionado
+                                                ? 'border-cyan-400 bg-cyan-600'
+                                                : 'border-slate-600 bg-slate-950',
+                                            )}
+                                          >
+                                            {seleccionado && (
+                                              <Check className="size-3 text-white" strokeWidth={3} />
+                                            )}
                                           </span>
-                                        )}
+                                          <span className="truncate text-sm font-medium text-slate-200">
+                                            {t.nombre}
+                                          </span>
+                                          {t.carga === 'saturado' && (
+                                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] font-semibold text-red-300 ring-1 ring-red-500/30">
+                                              <AlertTriangle className="size-3" /> Sobrecargado
+                                            </span>
+                                          )}
+                                        </div>
+                                        <span className={cn('text-sm font-bold tabular-nums', cfg.texto)}>
+                                          {t.total}
+                                        </span>
                                       </div>
-                                      <span className={cn('text-sm font-bold tabular-nums', cfg.texto)}>
-                                        {t.total}
-                                      </span>
-                                    </div>
-                                    <BarraProgreso valor={t.total / REF_SATURACION} color={cfg.barra} />
-                                    <p className="mt-1 text-[11px] text-slate-400">
-                                      {t.livianos} liviano · {t.pesados} pesado
-                                    </p>
-                                  </button>
-                                </li>
-                              )
-                            })}
-                          </ul>
+                                      <BarraProgreso valor={t.total / REF_SATURACION} color={cfg.barra} />
+                                      <p className="mt-1 text-[11px] text-slate-400">
+                                        {t.livianos} liviano · {t.pesados} pesado
+                                      </p>
+                                    </button>
+                                  </li>
+                                )
+                              })}
+                            </ul>
+                          </>
                         )}
                       </div>
                     )}
@@ -406,14 +458,14 @@ export function BalanceCuadrillas({
                 <li>
                   <button
                     type="button"
-                    onClick={() => onSeleccionarSinAsignar(null)}
+                    onClick={() => onToggleTecnico('sin_asignar')}
                     aria-pressed={
-                      tecnicoSeleccionadoId === 'sin_asignar' &&
+                      tecnicosSeleccionadosIds.includes('sin_asignar') &&
                       sinAsignarCiudadSeleccionada === null
                     }
                     className={cn(
                       'w-full rounded-xl px-3 py-2 text-left transition-all',
-                      tecnicoSeleccionadoId === 'sin_asignar' &&
+                      tecnicosSeleccionadosIds.includes('sin_asignar') &&
                         sinAsignarCiudadSeleccionada === null
                         ? 'bg-amber-500/10 ring-2 ring-amber-400/70'
                         : 'cursor-pointer hover:bg-slate-800/60',
@@ -436,7 +488,7 @@ export function BalanceCuadrillas({
               )}
               {ranking.map((r) => {
                 const cfg = CARGA_CONFIG[r.carga]
-                const seleccionado = tecnicoSeleccionadoId === r.tecnico.id
+                const seleccionado = tecnicosSeleccionadosIds.includes(r.tecnico.id)
                 return (
                   <li key={r.tecnico.id}>
                     <button
@@ -452,6 +504,18 @@ export function BalanceCuadrillas({
                     >
                       <div className="mb-1 flex items-center justify-between gap-2">
                         <div className="flex min-w-0 items-center gap-2">
+                          <span
+                            className={cn(
+                              'flex size-4 shrink-0 items-center justify-center rounded border transition',
+                              seleccionado
+                                ? 'border-cyan-400 bg-cyan-600'
+                                : 'border-slate-600 bg-slate-950',
+                            )}
+                          >
+                            {seleccionado && (
+                              <Check className="size-3 text-white" strokeWidth={3} />
+                            )}
+                          </span>
                           <span className="truncate text-sm font-medium text-slate-200">
                             {r.tecnico.nombre}
                           </span>

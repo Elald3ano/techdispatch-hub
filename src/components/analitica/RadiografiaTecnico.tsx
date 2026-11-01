@@ -46,7 +46,7 @@ interface OrdenState {
 }
 
 interface RadiografiaTecnicoProps {
-  tecnico: Tecnico
+  tecnicos: Tecnico[]
   servicios: Servicio[]
   barrioExpandido: string | null
   onToggleBarrio: (clave: string) => void
@@ -65,7 +65,7 @@ interface ResumenBarrio {
 
 /** Radiografía táctica de un técnico: desglose, filtro por servicio y vistas. */
 export function RadiografiaTecnico({
-  tecnico,
+  tecnicos,
   servicios,
   barrioExpandido,
   onToggleBarrio,
@@ -94,9 +94,20 @@ export function RadiografiaTecnico({
 
   const total = servicios.length
 
-  // Modo "Sin Asignar": el Centro de Mando envía un técnico sintético para las
-  // órdenes huérfanas; lo detectamos por su id o su nombre.
-  const esModoSinAsignar = tecnico.id === 'sin_asignar' || tecnico.nombre === 'Sin Asignar'
+  // Modo "Sin Asignar": un único técnico sintético para las órdenes huérfanas.
+  const esModoSinAsignar =
+    tecnicos.length === 1 &&
+    (tecnicos[0].id === 'sin_asignar' || tecnicos[0].nombre === 'Sin Asignar')
+  const esMulti = tecnicos.length > 1
+  const ciudadesTexto = [...new Set(servicios.map((s) => s.ciudad))].sort().join(', ') || 'Sin ciudad'
+  const nombreBase =
+    tecnicos.length === 1 ? tecnicos[0].nombre : `${tecnicos.length} técnicos seleccionados`
+
+  // Nombre del técnico por id (para la columna TÉCNICO en modo multicuadrilla).
+  const nombrePorId = useMemo(
+    () => new Map(tecnicos.map((t) => [t.id, t.nombre] as const)),
+    [tecnicos],
+  )
 
   // Desglose por tipo de servicio (siempre sobre el total del técnico, Invariante #1).
   const desgloseServicios = useMemo(() => {
@@ -202,39 +213,56 @@ export function RadiografiaTecnico({
     )
   }
 
-  // Exportación en 1 clic: respeta chips + umbral de días + orden de columnas.
+  // Exportación en 1 clic: agrupa por técnico seleccionado y genera la planilla conjunta.
   async function descargarPlanilla() {
-    const ordenesOrdenadas = serviciosFiltrados
-    if (ordenesOrdenadas.length === 0) {
-      notificar('Este técnico no tiene órdenes para exportar.', 'error')
+    if (serviciosFiltrados.length === 0) {
+      notificar('No hay órdenes para exportar.', 'error')
       return
     }
     setGenerandoPdf(true)
     try {
-      const { exportarVistaActualPdf, slugificar, marcaDeTiempo } = await import(
+      const { generarPlanillaPdf, slugificar, marcaDeTiempo } = await import(
         '../../services/pdfGenerator'
       )
-      const ciudadesUnicas = [...new Set(ordenesOrdenadas.map((s) => s.ciudad))].sort()
-      // Nota táctica: filtros activos + ordenamiento de la tabla.
+      // Agrupa las órdenes filtradas por técnico seleccionado ('sin_asignar' = huérfanas).
+      const grupos = tecnicos
+        .map((t) => ({
+          tecnico: t,
+          servicios: serviciosFiltrados.filter((s) =>
+            t.id === 'sin_asignar' ? s.tecnico_id === null : s.tecnico_id === t.id,
+          ),
+        }))
+        .filter((g) => g.servicios.length > 0)
+
+      if (grupos.length === 0) {
+        notificar('No hay órdenes para exportar.', 'error')
+        return
+      }
+
       const filtros: string[] = []
       if (umbralDias !== null) filtros.push(`≥ ${umbralDias} días`)
       if (serviciosFiltro.length > 0) filtros.push(`${serviciosFiltro.length} servicio(s)`)
-      const notaFiltros = `Filtros: ${
-        filtros.length > 0 ? filtros.join(' + ') : 'Todas'
-      } | Ordenado por: ${orden.columna} (${orden.direccion})`
+      const notaFiltros = `Filtros: ${filtros.length > 0 ? filtros.join(' + ') : 'Todas'}`
 
-      const doc = await exportarVistaActualPdf(ordenesOrdenadas, [tecnico], {
-        conteo: ordenesOrdenadas.length,
-        ciudad: ciudadesUnicas.join(', ') || 'Todas',
-        barrio: 'Todas',
-        tecnico: tecnico.nombre,
-        columna: orden.columna,
-        direccion: orden.direccion,
+      const doc = await generarPlanillaPdf(grupos, {
+        soloCriticas: false,
+        ciudad: ciudadesTexto,
+        respetarOrden: false,
         notaFiltros,
       })
+
+      const base =
+        grupos.length === 1
+          ? slugificar(grupos[0].tecnico.nombre)
+          : `consolidado-${grupos.length}-tecnicos`
       const sufijo = umbralDias !== null ? `-mas-${umbralDias}dias` : ''
-      doc.save(`PD-${slugificar(tecnico.nombre)}${sufijo}-${marcaDeTiempo()}.pdf`)
-      notificar(`Planilla de ${tecnico.nombre} descargada con éxito.`, 'success')
+      doc.save(`PD-${base}${sufijo}-${marcaDeTiempo()}.pdf`)
+      notificar(
+        grupos.length === 1
+          ? `Planilla de ${grupos[0].tecnico.nombre} descargada con éxito.`
+          : `Planilla conjunta de ${grupos.length} técnicos descargada con éxito.`,
+        'success',
+      )
     } catch (error) {
       notificar(
         error instanceof Error ? error.message : 'No se pudo generar el PDF.',
@@ -249,7 +277,11 @@ export function RadiografiaTecnico({
   async function nombrePng(): Promise<string> {
     const { slugificar, marcaDeTiempo } = await import('../../services/pdfGenerator')
     const sufijo = umbralDias !== null ? `-mas-${umbralDias}dias` : ''
-    return `PD-${slugificar(tecnico.nombre)}${sufijo}-${marcaDeTiempo()}.png`
+    const base =
+      tecnicos.length === 1
+        ? slugificar(tecnicos[0].nombre)
+        : `consolidado-${tecnicos.length}-tecnicos`
+    return `PD-${base}${sufijo}-${marcaDeTiempo()}.png`
   }
 
   /** Captura la tarjeta en HD y la copia al portapapeles (fallback: descarga). */
@@ -288,7 +320,7 @@ export function RadiografiaTecnico({
     try {
       const { blob } = await capturarElementoComoImagen(capturaRef.current)
       descargarBlob(blob, await nombrePng())
-      notificar(`Imagen de ${tecnico.nombre} descargada.`, 'success')
+      notificar(`Imagen de ${nombreBase} descargada.`, 'success')
     } catch (error) {
       notificar(
         error instanceof Error ? error.message : 'No se pudo generar el PNG.',
@@ -310,7 +342,11 @@ export function RadiografiaTecnico({
           <div className="min-w-0">
             <h3 className="flex flex-wrap items-center gap-2 text-base font-bold text-white">
               <span className="truncate">
-                {esModoSinAsignar ? '⚠️ Órdenes Sin Asignar' : tecnico.nombre}
+                {esModoSinAsignar
+                  ? '⚠️ Órdenes Sin Asignar'
+                  : esMulti
+                    ? `👥 ${tecnicos.length} Técnicos Seleccionados (${ciudadesTexto})`
+                    : tecnicos[0].nombre}
               </span>
               <span
                 className={cn(
@@ -328,7 +364,9 @@ export function RadiografiaTecnico({
             <p className="text-xs text-slate-400">
               {esModoSinAsignar
                 ? 'Órdenes huérfanas que requieren asignación territorial'
-                : 'Radiografía por zona del técnico'}
+                : esMulti
+                  ? `Despacho táctico conjunto · ${total} órdenes totales`
+                  : 'Radiografía por zona del técnico'}
             </p>
           </div>
         </div>
@@ -456,7 +494,11 @@ export function RadiografiaTecnico({
               MillaOps Hub · Radiografía de despacho
             </p>
             <p className="truncate text-base font-bold text-white">
-              {esModoSinAsignar ? 'Órdenes Sin Asignar' : tecnico.nombre}
+              {esModoSinAsignar
+                ? 'Órdenes Sin Asignar'
+                : esMulti
+                  ? `${tecnicos.length} Técnicos Seleccionados`
+                  : tecnicos[0].nombre}
             </p>
             <p className="text-[11px] text-slate-400">
               {[...new Set(serviciosFiltrados.map((s) => s.ciudad))].sort().join(', ') ||
@@ -684,6 +726,7 @@ export function RadiografiaTecnico({
                       orden={orden}
                       onOrdenar={ordenarPor}
                     />
+                    {esMulti && <th className="px-3 py-1.5 font-semibold">Técnico</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -714,6 +757,11 @@ export function RadiografiaTecnico({
                         </p>
                       </td>
                       <td className="px-3 py-1.5 text-slate-300">{s.tipo_servicio}</td>
+                      {esMulti && (
+                        <td className="px-3 py-1.5 whitespace-nowrap text-slate-300">
+                          {s.tecnico_id ? (nombrePorId.get(s.tecnico_id) ?? '—') : 'Sin Asignar'}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
