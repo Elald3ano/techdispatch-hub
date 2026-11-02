@@ -238,26 +238,6 @@ export async function reemplazarServiciosActivos(
   }
 }
 
-/** Reasigna manualmente un técnico a un servicio (o lo deja sin asignar). */
-export async function actualizarTecnicoServicio(
-  servicioId: string,
-  tecnicoId: string | null,
-): Promise<void> {
-  const { error } = await supabase
-    .from('servicios')
-    .update({ tecnico_id: tecnicoId })
-    .eq('id', servicioId)
-
-  if (error) throw new Error(`Error al actualizar el técnico del servicio: ${error.message}`)
-}
-
-/** Elimina una regla de asignación existente. */
-export async function eliminarRegla(reglaId: string): Promise<void> {
-  const { error } = await supabase.from('reglas_asignacion').delete().eq('id', reglaId)
-
-  if (error) throw new Error(`Error al eliminar la regla: ${error.message}`)
-}
-
 // ---- Importación masiva de la matriz de asignación ----
 
 const TECNICOS_INVALIDOS = new Set(['', 'n/a', 'na', '-'])

@@ -1,5 +1,5 @@
 import { limpiarBarrio, limpiarTexto } from '../lib/normalizer'
-import type { ReglaAsignacion, ServicioNuevo } from '../types'
+import type { ReglaAsignacion } from '../types'
 
 /** Clave geográfica Prioridad 2 (ciudad + barrio canónico). */
 function claveCiudadBarrio(ciudad: string, barrio: string): string {
@@ -20,11 +20,13 @@ function claveCiudadBarrio(ciudad: string, barrio: string): string {
  * El fallback por ciudad (antigua Prioridad 3) se elimina: una cuadrilla
  * flotante no debe quedar absorbida por una regla genérica de ciudad, y un
  * barrio sin dueño territorial debe quedar explícitamente sin asignar.
+ *
+ * Es **genérica** en `T`: devuelve el mismo tipo que recibe, por lo que el
+ * llamador ya no necesita un `as` para recuperar `Servicio[]`.
  */
-export function aplicarMatrizAsignacion(
-  servicios: ServicioNuevo[],
-  reglas: ReglaAsignacion[],
-): ServicioNuevo[] {
+export function aplicarMatrizAsignacion<
+  T extends { ciudad: string; barrio: string; tipo_servicio: string; tecnico_id: string | null },
+>(servicios: T[], reglas: ReglaAsignacion[]): T[] {
   const mapPrio1 = new Map<string, string>()
   const mapPrio2 = new Map<string, string>()
 

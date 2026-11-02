@@ -50,8 +50,8 @@ export function calcularCierres(
   const hoyFiltrados = serviciosHoy.filter((s) => esSucursalAutorizada(s.ciudad))
 
   // 2. Asignación de técnicos con la matriz actual.
-  const ayerAsignados = aplicarMatrizAsignacion(ayerFiltrados, reglas) as Servicio[]
-  const hoyAsignados = aplicarMatrizAsignacion(hoyFiltrados, reglas) as Servicio[]
+  const ayerAsignados = aplicarMatrizAsignacion(ayerFiltrados, reglas)
+  const hoyAsignados = aplicarMatrizAsignacion(hoyFiltrados, reglas)
 
   // 3. Claves de órdenes de Hoy para detectar cierres.
   const ordenesHoy = new Set(hoyAsignados.map((s) => s.numero_orden))

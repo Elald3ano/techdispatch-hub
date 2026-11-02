@@ -29,12 +29,6 @@ export function conRetraso(dias: number): boolean {
   return dias >= 2
 }
 
-export const SLA_LABELS: Record<SlaLevel, string> = {
-  ok: '1 día',
-  warn: '2 días',
-  critical: '3+ días',
-}
-
 /** Clases de Tailwind del bloque sólido por nivel de SLA (semáforo). */
 export const SLA_BADGE_CLASSES: Record<SlaLevel, string> = {
   ok: 'bg-emerald-600 text-white',
@@ -42,20 +36,12 @@ export const SLA_BADGE_CLASSES: Record<SlaLevel, string> = {
   critical: 'bg-red-600 text-white',
 }
 
-/** Rango de días de los filtros de SLA. */
-export type RangoSla = 'todos' | 'ok' | 'warn' | 'critical'
-
-export function coincideRangoSla(dias: number, rango: RangoSla): boolean {
-  if (rango === 'todos') return true
-  return clasificarSla(dias) === rango
-}
-
-/** Ciudades sugeridas para el filtro de carga. */
+/** Ciudades sugeridas para el filtro de carga (solo sucursales de la lista blanca). */
 export const CIUDADES_SUGERIDAS = [
-  'Pereira',
   'Cali',
-  'Manizales',
-  'Medellín',
-  'Bogotá',
-  'Armenia',
+  'BuenaVentura',
+  'Palmira',
+  'Tulua',
+  'Jamundi',
+  'Buga',
 ] as const
